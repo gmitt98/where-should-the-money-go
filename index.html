@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Where should the money go? Down payment, points, or the market</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root {
+    --paper: #F7F8F6; --ink: #1B2430; --muted: #66707C; --rule: #D9DDD8;
+    --blue: #2F5D8A; --amber: #C58B1F; --gain: #1F7A4D; --loss: #B3402E;
+    --surface: #FFFFFF; --field: #FBFCFA; --focus: #2F5D8A;
+  }
+  * { box-sizing: border-box; }
+  html { font-size: 16px; }
+  body {
+    margin: 0; background: var(--paper); color: var(--ink);
+    font-family: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
+    font-feature-settings: "tnum" 1; line-height: 1.5;
+  }
+  a { color: var(--blue); }
+  header { max-width: 1120px; margin: 0 auto; padding: 40px 24px 8px; }
+  h1 { font-size: 2rem; font-weight: 600; letter-spacing: -0.01em; margin: 0 0 8px; line-height: 1.15; }
+  .lead { max-width: 62ch; margin: 0; color: var(--muted); font-size: 1.05rem; }
+
+  main { max-width: 1120px; margin: 0 auto; padding: 16px 24px 64px; display: grid; grid-template-columns: 400px 1fr; gap: 40px; align-items: start; }
+  main > * { min-width: 0; }
+  #method { grid-column: 1; }
+  @media (max-width: 900px) { #method { grid-column: auto; } }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; gap: 24px; } .results { position: static !important; } }
+
+  section { padding: 24px 0; border-top: 1px solid var(--rule); }
+  section:first-child { border-top: none; padding-top: 8px; }
+  h2 { font-size: 1.15rem; font-weight: 600; margin: 0 0 4px; display: flex; align-items: baseline; gap: 12px; }
+  h2 .n { color: var(--muted); font-weight: 400; font-size: 1rem; min-width: 1.2em; }
+  .why { color: var(--muted); font-size: 0.92rem; margin: 0 0 16px; max-width: 48ch; }
+
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px; margin-bottom: 12px; }
+  .row.one { grid-template-columns: 1fr; }
+  label { display: block; font-size: 0.85rem; color: var(--muted); }
+  label span.lbl { display: block; margin-bottom: 4px; }
+  .field { display: flex; align-items: center; background: var(--field); border: 1px solid var(--rule); border-radius: 6px; padding: 0 10px; height: 38px; }
+  .field:focus-within { border-color: var(--focus); box-shadow: 0 0 0 3px rgba(47,93,138,0.15); }
+  .field input, .field select { border: 0; background: transparent; font: inherit; color: var(--ink); width: 100%; min-width: 0; height: 100%; outline: none; }
+  .field .unit { color: var(--muted); font-size: 0.85rem; margin-left: 6px; white-space: nowrap; }
+  input[type=range] { width: 100%; accent-color: var(--blue); margin: 6px 0 0; }
+  input:focus-visible, select:focus-visible, button:focus-visible, summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+  .toggle { display: flex; align-items: center; gap: 10px; font-size: 1rem; color: var(--ink); cursor: pointer; margin: 0 0 14px; }
+  .toggle input { width: 18px; height: 18px; accent-color: var(--blue); margin: 0; }
+  .collapsed > *:not(h2):not(.toggle):not(.why) { display: none; }
+
+  .readout { display: grid; grid-template-columns: 1fr auto; gap: 6px 16px; font-size: 0.95rem; margin: 14px 0 0; }
+  .readout dt { color: var(--muted); margin: 0; }
+  .readout dd { margin: 0; text-align: right; font-weight: 500; white-space: nowrap; }
+  .readout dd.big { font-size: 1.05rem; font-weight: 600; }
+  .gain { color: var(--gain); } .loss { color: var(--loss); }
+  .hint { font-size: 0.82rem; color: var(--muted); margin: 8px 0 0; max-width: 48ch; }
+
+  details { margin-top: 10px; }
+  summary { cursor: pointer; color: var(--blue); font-size: 0.9rem; }
+  details[open] summary { margin-bottom: 10px; }
+
+  table.wp { width: 100%; border-collapse: collapse; font-size: 0.9rem; margin-top: 8px; }
+  table.wp td { padding: 3px 4px; }
+  table.wp input { width: 100%; font: inherit; border: 1px solid var(--rule); border-radius: 4px; padding: 5px 8px; background: var(--field); }
+  button.small { font: inherit; font-size: 0.85rem; color: var(--blue); background: none; border: 1px solid var(--rule); border-radius: 4px; padding: 4px 10px; cursor: pointer; }
+  button.small:hover { border-color: var(--blue); }
+
+  .results { position: sticky; top: 16px; max-height: calc(100vh - 32px); overflow-y: auto; background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 20px 18px 16px; }
+  .mswrap { overflow-x: auto; }
+  .verdict { font-size: 1.02rem; margin: 0 0 14px; }
+  .verdict p { margin: 0 0 6px; }
+  .verdict b { font-weight: 600; }
+  .chartwrap { position: relative; height: 330px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 0.85rem; color: var(--muted); margin: 8px 0 0; }
+  .legend i { display: inline-block; width: 14px; height: 3px; vertical-align: middle; margin-right: 6px; border-radius: 2px; }
+  .legend .tri { width: 0; height: 0; border-left: 5px solid transparent; border-right: 5px solid transparent; border-bottom: 9px solid var(--ink); border-radius: 0; margin-right: 6px; }
+
+  table.ms { width: 100%; border-collapse: collapse; margin-top: 18px; font-size: 0.86rem; }
+  table.ms th, table.ms td { padding: 6px 3px; text-align: right; border-bottom: 1px solid var(--rule); white-space: nowrap; }
+  table.ms th { font-weight: 500; color: var(--muted); }
+  table.ms th:first-child, table.ms td:first-child { text-align: left; }
+  table.ms td.sub { color: var(--muted); font-size: 0.82rem; }
+  table.ms tr.lead td { font-weight: 500; }
+  .ratechart { height: 180px; position: relative; margin-top: 18px; }
+  .foot { font-size: 0.82rem; color: var(--muted); margin: 14px 0 0; }
+
+  .decomp { margin-top: 14px; font-size: 0.9rem; }
+  .decomp table { width: 100%; border-collapse: collapse; }
+  .decomp td { padding: 4px 0; border-bottom: 1px solid var(--rule); }
+  .decomp td:last-child { text-align: right; white-space: nowrap; }
+  .decomp tr.total td { font-weight: 600; border-bottom: none; padding-top: 8px; }
+  .method p { max-width: 62ch; font-size: 0.92rem; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Where should the money go?</h1>
+  <p class="lead">You're buying a house. Every dollar you have can go into the down payment, into buying down the rate, or stay invested. This shows which, and when it stops being true.</p>
+</header>
+
+<main>
+<div class="inputs">
+
+  <section id="s1">
+    <h2><span class="n">1</span>Your loan</h2>
+    <p class="why">Start with the Loan Estimate in your hand.</p>
+    <div class="row">
+      <label><span class="lbl">Home price</span><span class="field"><span class="unit">$</span><input id="price" type="number" step="1000" value="750000"></span></label>
+      <label><span class="lbl">Loan term</span><span class="field"><select id="term"><option value="30">30 years</option><option value="15">15 years</option></select></span></label>
+    </div>
+    <div class="row">
+      <label><span class="lbl">Down payment</span><span class="field"><input id="d0" type="number" step="0.5" min="0" max="100" value="20"><span class="unit">%</span></span></label>
+      <label><span class="lbl">Interest rate, no points</span><span class="field"><input id="r0" type="number" step="0.005" value="6.500"><span class="unit">%</span></span></label>
+    </div>
+    <div class="row">
+      <label><span class="lbl">What you expect to earn investing</span><span class="field"><input id="inv" type="number" step="0.5" value="8.0"><span class="unit">% / yr</span></span></label>
+      <label><span class="lbl">Tax benefit per $1 of mortgage interest</span><span class="field"><input id="tau" type="number" step="1" min="0" max="60" value="25"><span class="unit">¢</span></span></label>
+    </div>
+    <p class="hint">The investing number is the one that decides everything. Use what you'd honestly plan on, not what the last five years did. The tax benefit is 0 if you take the standard deduction, and less than your marginal rate if you itemize, because the first slice of interest only earns back the standard deduction.</p>
+    <details>
+      <summary>More assumptions</summary>
+      <div class="row">
+        <label><span class="lbl">Capital gains rate when you sell investments</span><span class="field"><input id="cg" type="number" step="1" min="0" max="50" value="20"><span class="unit">%</span></span></label>
+        <label><span class="lbl">Annual tax drag on a taxable account</span><span class="field"><input id="drag" type="number" step="0.1" min="0" max="3" value="0.4"><span class="unit">%</span></span></label>
+      </div>
+      <p class="hint">Home equity is never taxed as a capital gain the way a brokerage account is, which quietly favours the house. Set both to zero if this money lives in a tax-advantaged account.</p>
+    </details>
+    <dl class="readout">
+      <dt>Loan amount</dt><dd id="o-loan"></dd>
+      <dt>Monthly principal and interest</dt><dd id="o-pi"></dd>
+    </dl>
+  </section>
+
+  <section id="s2">
+    <h2><span class="n">2</span>Put more down, or less?</h2>
+    <p class="why">Every extra dollar in the house retires a dollar of debt at your note rate, guaranteed. The same dollar in the market earns whatever the market gives.</p>
+    <div class="row one">
+      <label><span class="lbl">Compare against putting <b id="d1lbl">30%</b> down</span>
+        <input id="d1" type="range" min="0" max="100" step="0.5" value="30">
+      </label>
+    </div>
+    <div class="row">
+      <label><span class="lbl">Rate at that down payment</span><span class="field"><input id="r1" type="number" step="0.005" value="6.500"><span class="unit">%</span></span></label>
+      <label><span class="lbl">Show details at</span><span class="field"><select id="ms2"><option value="24">2 years</option><option value="60">5 years</option><option value="120" selected>10 years</option><option value="180">15 years</option><option value="360">30 years</option></select></span></label>
+    </div>
+    <p class="hint">Lenders often price a better rate once you cross 25% or 30% down. If your rate sheet shows that, put the better rate here. Otherwise leave it equal.</p>
+    <dl class="readout">
+      <dt id="o-dp-cashlbl">Extra cash into the house</dt><dd id="o-dp-cash"></dd>
+      <dt>Worth, versus investing it, at <span id="o-dp-mslbl">10 years</span></dt><dd id="o-dp-val" class="big"></dd>
+      <dt>It beats investing if you'd earn</dt><dd id="o-dp-be"></dd>
+    </dl>
+    <div class="decomp" id="dp-decomp"></div>
+  </section>
+
+  <section id="s3" class="collapsed">
+    <h2><span class="n">3</span>Buy down the rate?</h2>
+    <p class="why">Points cost cash today for a lower payment every month. That cash could have been invested. Both sides count.</p>
+    <label class="toggle"><input id="on3" type="checkbox"> Show me a rate buydown</label>
+    <div class="row">
+      <label><span class="lbl">Discount points (negative for a lender credit)</span><span class="field"><input id="pts" type="number" step="0.125" value="2"></span></label>
+      <label><span class="lbl">Rate with those points</span><span class="field"><input id="rp" type="number" step="0.005" value="6.000"><span class="unit">%</span></span></label>
+    </div>
+    <div class="row">
+      <label><span class="lbl">Cost per point</span><span class="field"><input id="ptcost" type="number" step="0.05" value="1.00"><span class="unit">% of loan</span></span></label>
+      <label><span class="lbl">Show details at</span><span class="field"><select id="ms3"><option value="24">2 years</option><option value="60">5 years</option><option value="120" selected>10 years</option><option value="180">15 years</option><option value="360">30 years</option></select></span></label>
+    </div>
+    <p class="hint">Type the rate straight off the lender's sheet. The prefilled rate assumes a quarter point per point, and real pricing gets worse after the second point.</p>
+    <dl class="readout">
+      <dt id="o-pt-cashlbl">Cash for the points</dt><dd id="o-pt-cash"></dd>
+      <dt>Monthly payment change</dt><dd id="o-pt-pmt"></dd>
+      <dt>Payback the lender will quote</dt><dd id="o-pt-naive"></dd>
+      <dt>Payback once the cash is charged for lost growth</dt><dd id="o-pt-true" class="big"></dd>
+      <dt>Worth, versus not buying, at <span id="o-pt-mslbl">10 years</span></dt><dd id="o-pt-val" class="big"></dd>
+      <dt>It beats investing if you'd earn</dt><dd id="o-pt-be"></dd>
+    </dl>
+    <div class="decomp" id="pt-decomp"></div>
+  </section>
+
+  <section id="s4" class="collapsed">
+    <h2><span class="n">4</span>What if rates move?</h2>
+    <p class="why">You hold a free option to refinance when rates fall. Points are a bet that you won't use it. A lender credit is a bet that you will.</p>
+    <label class="toggle"><input id="on4" type="checkbox"> Model a rate path and refinancing</label>
+    <div class="row">
+      <label><span class="lbl">Rate path</span><span class="field"><select id="preset">
+        <option value="flat">Rates stay flat</option>
+        <option value="fall150y2" selected>Fall 1.5% by year 2</option>
+        <option value="fall75y3">Fall 0.75% by year 3</option>
+        <option value="fall100y5">Fall 1% by year 5</option>
+        <option value="rise100y2">Rise 1% by year 2</option>
+        <option value="custom">Custom</option>
+      </select></span></label>
+      <label><span class="lbl">Refinance cost</span><span class="field"><input id="rcost" type="number" step="0.25" value="2.0"><span class="unit">% of balance</span></span></label>
+    </div>
+    <div class="row">
+      <label><span class="lbl">Payback you'd demand before refinancing</span><span class="field"><input id="rpay" type="number" step="6" min="6" value="36"><span class="unit">months</span></span></label>
+      <label><span class="lbl">So you refinance once rates are lower by</span><span class="field"><input id="rtrig" type="text" readonly></span></label>
+    </div>
+    <table class="wp" id="wptable"><tbody></tbody></table>
+    <button class="small" id="addwp" type="button">Add a step</button>
+    <p class="hint">The market rate steps to each value in the year listed and holds there. Each loan refinances the first month the market is far enough below its own note rate, into the same remaining term.</p>
+    <dl class="readout" id="o-refi"></dl>
+  </section>
+
+
+
+</div>
+
+<aside class="results">
+  <div class="verdict" id="verdict"></div>
+  <div class="chartwrap"><canvas id="chart"></canvas></div>
+  <div class="legend">
+    <span>Above zero: better than your baseline loan. Below: worse. Click a name to hide a line.</span>
+    <span id="lg-refi" hidden><i class="tri"></i>marks a refinance</span>
+  </div>
+  <div class="mswrap"><table class="ms" id="mstable"></table></div>
+  <div class="ratechart" id="rc-wrap" hidden><canvas id="ratechart"></canvas></div>
+  <p class="foot" id="foot"></p>
+</aside>
+
+  <section class="method" id="method">
+    <h2>How this works</h2>
+    <p>Every option is given the same cash at closing and the same monthly budget, set to the most expensive option's payment. Whatever an option doesn't spend at closing is invested. Whatever it doesn't spend each month is invested too, along with the tax benefit on that month's interest. At any point in time, wealth is the brokerage account minus the loan balance. The house is the same house in every option, so its value, its appreciation, its taxes and its insurance all cancel and never appear.</p>
+    <p>That is why there is no "how much cash do you have" question. A point costs a percentage of the loan and saves a percentage of the loan, so loan size cancels. A dollar of down payment retires a dollar of debt at the note rate regardless of the house. Cash on hand decides which options you can afford, not which one is right.</p>
+    <p>Points and down payments are guaranteed returns. Investments are not. Everything here compares expected values and is blind to risk, so over long horizons it leans toward the market by construction. A lower payment is real insurance against a bad year and shows up nowhere in these numbers.</p>
+    <p>Discount points on a purchase are usually deductible in the year paid if you itemize; this doesn't credit that, so it is mildly harsh on buydowns. The tax benefit rate is held constant when it really falls as interest declines, which is mildly generous to them. Refinancing here keeps the remaining term rather than resetting to a fresh thirty years.</p>
+  </section>
+</main>
+
+<!-- ENGINE-START -->
+<script>
+// ---------------------------------------------------------------------------
+// Engine: month-by-month wealth comparison for mortgage cash decisions.
+//
+// Every "branch" (baseline, bigger down payment, rate buydown) is put on
+// identical footing: same cash at closing, same monthly budget. Cash a branch
+// does not spend at closing goes into a brokerage account. Each month, the
+// budget minus that branch's actual P&I goes into the account too, plus the
+// tax benefit on that month's interest. Wealth = -loan balance + brokerage
+// (net of capital gains on its growth). The house itself is identical in every branch and
+// cancels, so it never appears.
+// ---------------------------------------------------------------------------
+const Engine = (() => {
+  function pmt(i, n, L) {
+    return i === 0 ? L / n : (L * i) / (1 - Math.pow(1 + i, -n));
+  }
+
+  // branch: { loan, rate, upfront }   upfront = cash spent at closing
+  // shared: { termMonths, budget, invReturn, drag, capGains, taxBenefit,
+  //           refiOn, refiCost, refiTrigger, ratePath(month) -> annual rate }
+  function simulate(branch, shared) {
+    const n = shared.termMonths;
+    const R = 1 + (shared.invReturn - shared.drag) / 12;
+    let bal = branch.loan;
+    let note = branch.rate;
+    let pay = pmt(note / 12, n, bal);
+    // Brokerage split into three sub-accounts so the result can be explained:
+    //   cash  : money spent (or received) at closing, compounding
+    //   pays  : budget minus actual P&I, reinvested
+    //   tax   : tax benefit on interest, reinvested
+    let cash = -branch.upfront, pays = 0, tax = 0;
+    let basis = -branch.upfront;
+    const out = {
+      wealth: [], balance: [], noteRate: [], cash: [], pays: [], tax: [],
+      capgains: [], refis: [], initialPayment: pay,
+    };
+    const record = (m) => {
+      const brok = cash + pays + tax;
+      // Linear capital gains: assumes the taxable account is in gain, so each
+      // marginal dollar is taxed on its growth. This is what lets the size of
+      // the cash pot cancel out of every comparison.
+      const cg = shared.capGains * (brok - basis);
+      out.wealth[m] = -bal + brok - cg;
+      out.balance[m] = bal;
+      out.noteRate[m] = note;
+      out.cash[m] = cash; out.pays[m] = pays; out.tax[m] = tax; out.capgains[m] = -cg;
+    };
+    record(0);
+    for (let m = 1; m <= n; m++) {
+      if (shared.refiOn && bal > 0) {
+        const mkt = shared.ratePath(m);
+        if (mkt <= note - shared.refiTrigger - 1e-12) {
+          const cost = shared.refiCost * bal;
+          cash -= cost; basis -= cost;
+          out.refis.push({ month: m, from: note, to: mkt, cost });
+          note = mkt;
+          pay = pmt(note / 12, n - m + 1, bal);   // keeps the remaining term
+        }
+      }
+      const interest = bal * note / 12;
+      const principal = bal > 0 ? Math.min(bal, pay - interest) : 0;
+      const paid = bal > 0 ? interest + principal : 0;
+      const c1 = shared.budget - paid;
+      const c2 = shared.taxBenefit * interest;
+      cash *= R;
+      pays = pays * R + c1;
+      tax = tax * R + c2;
+      basis += c1 + c2;
+      bal -= principal;
+      if (bal < 1e-9) bal = 0;
+      record(m);
+    }
+    return out;
+  }
+
+  // Wealth difference series: alt minus base.
+  function delta(altRun, baseRun) {
+    return altRun.wealth.map((w, m) => w - baseRun.wealth[m]);
+  }
+
+  // First month the sign of the gap settles the other way. Returns
+  // { month, direction } where direction is "starts" (was losing, starts
+  // winning) or "stops" (was winning, stops), or null if it never flips.
+  function crossover(d) {
+    const startPositive = d[1] > 0;
+    for (let m = 1; m < d.length; m++) {
+      if (startPositive ? d[m] <= 0 : d[m] > 0) {
+        return { month: startPositive ? m - 1 : m, direction: startPositive ? "stops" : "starts" };
+      }
+    }
+    return null;
+  }
+
+  // Investment return at which alt and base tie at month T. Bisection over
+  // [0, 0.30]. Returns { rate } or { always: true } / { never: true }.
+  function breakevenReturn(makeRuns, T) {
+    const f = (r) => { const [a, b] = makeRuns(r); return a.wealth[T] - b.wealth[T]; };
+    let lo = 0.0, hi = 0.30;
+    const flo = f(lo), fhi = f(hi);
+    if (flo > 0 && fhi > 0) return { always: true, side: "below" };
+    if (flo <= 0 && fhi <= 0) return { never: true, side: "below" };
+    // Positive at low return means the house wins when the market is weak:
+    // "do it if your return is below X". Otherwise the inequality flips.
+    const side = flo > 0 ? "below" : "above";
+    for (let k = 0; k < 40; k++) {
+      const mid = (lo + hi) / 2;
+      if ((f(mid) > 0) === (flo > 0)) lo = mid; else hi = mid;
+    }
+    return { rate: (lo + hi) / 2, side };
+  }
+
+  // Step-function rate path from waypoints [{year, rate}], base rate before
+  // the first waypoint.
+  function makeRatePath(baseRate, waypoints) {
+    const pts = (waypoints || []).filter(w => isFinite(w.year) && isFinite(w.rate))
+      .slice().sort((a, b) => a.year - b.year);
+    return (month) => {
+      const yr = month / 12;
+      let r = baseRate;
+      for (const w of pts) { if (yr >= w.year) r = w.rate; else break; }
+      return r;
+    };
+  }
+
+  return { pmt, simulate, delta, crossover, breakevenReturn, makeRatePath };
+})();
+
+if (typeof module !== "undefined") module.exports = Engine;
+
+</script>
+<!-- ENGINE-END -->
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const MS = [24, 60, 120, 180, 360];
+  const fmtUSD = (x, sign = true) => {
+    const a = Math.abs(x);
+    const s = a >= 1e6 ? `$${(a / 1e6).toFixed(2)}M` : `$${Math.round(a).toLocaleString()}`;
+    return (x < 0 ? "−" : (sign && x > 0 ? "+" : "")) + s;
+  };
+  const fmtPct = (x, d = 1) => `${(x * 100).toFixed(d).replace(/\.0+$/, "")}%`;
+  const cls = (x) => (x > 0 ? "gain" : x < 0 ? "loss" : "");
+  const yrs = (m) => (m % 12 === 0 ? `${m / 12} years` : `${(m / 12).toFixed(1)} years`);
+
+  const PRESETS = {
+    flat: [], fall150y2: [{ year: 2, d: -0.015 }], fall75y3: [{ year: 3, d: -0.0075 }],
+    fall100y5: [{ year: 5, d: -0.01 }], rise100y2: [{ year: 2, d: 0.01 }],
+  };
+  let waypoints = [];
+
+  // ---- state
+  function num(id) { return parseFloat($(id).value); }
+  function readState() {
+    return {
+      price: num("price"), term: parseInt($("term").value, 10) * 12,
+      d0: num("d0") / 100, r0: num("r0") / 100, inv: num("inv") / 100, tau: num("tau") / 100,
+      cg: num("cg") / 100, drag: num("drag") / 100,
+      d1: num("d1") / 100, r1: num("r1") / 100, ms2: parseInt($("ms2").value, 10),
+      on3: $("on3").checked, pts: num("pts"), rp: num("rp") / 100, ptcost: num("ptcost") / 100,
+      ms3: parseInt($("ms3").value, 10),
+      on4: $("on4").checked, rcost: num("rcost") / 100, rpay: num("rpay"),
+    };
+  }
+
+  // ---- compute
+  function compute(st) {
+    const loan0 = st.price * (1 - st.d0);
+    const base = { loan: loan0, rate: st.r0, upfront: st.price * st.d0 };
+    const more = { loan: st.price * (1 - st.d1), rate: st.r1, upfront: st.price * st.d1 };
+    const ptsCost = st.pts * st.ptcost * loan0;
+    const pointsBr = { loan: loan0, rate: st.rp, upfront: st.price * st.d0 + ptsCost };
+    const branches = [base, more]; if (st.on3) branches.push(pointsBr);
+    const budget = Math.max(...branches.map(b => Engine.pmt(b.rate / 12, st.term, b.loan)));
+    const trigger = st.rcost * 12 / st.rpay;
+    const mkShared = (inv) => ({
+      termMonths: st.term, budget, invReturn: inv, drag: st.drag, capGains: st.cg, taxBenefit: st.tau,
+      refiOn: st.on4, refiCost: st.rcost, refiTrigger: trigger,
+      ratePath: Engine.makeRatePath(st.r0, waypoints),
+    });
+    const sh = mkShared(st.inv);
+    const rb = Engine.simulate(base, sh), rm = Engine.simulate(more, sh);
+    const rp = st.on3 ? Engine.simulate(pointsBr, sh) : null;
+    const dMore = Engine.delta(rm, rb), dPts = rp ? Engine.delta(rp, rb) : null;
+    const beMore = {}, bePts = {};
+    for (const T of MS) {
+      beMore[T] = Engine.breakevenReturn((r) => { const s = mkShared(r); return [Engine.simulate(more, s), Engine.simulate(base, s)]; }, T);
+      if (rp) bePts[T] = Engine.breakevenReturn((r) => { const s = mkShared(r); return [Engine.simulate(pointsBr, s), Engine.simulate(base, s)]; }, T);
+    }
+    return { st, loan0, base, more, pointsBr, ptsCost, budget, trigger, rb, rm, rp, dMore, dPts, beMore, bePts, sh };
+  }
+
+  // ---- decomposition of a gap into where the money went
+  function decomp(alt, baseRun, T, labels) {
+    const rows = [
+      [labels.cash, alt.cash[T] - baseRun.cash[T]],
+      [labels.pays, alt.pays[T] - baseRun.pays[T]],
+      ["Tax deduction given up, reinvested", alt.tax[T] - baseRun.tax[T]],
+      ["Lower loan balance", -(alt.balance[T] - baseRun.balance[T])],
+      ["Capital gains tax difference", alt.capgains[T] - baseRun.capgains[T]],
+    ];
+    const total = rows.reduce((s, r) => s + r[1], 0);
+    return `<table>${rows.map(([k, v]) => `<tr><td>${k}</td><td class="${cls(v)}">${fmtUSD(v)}</td></tr>`).join("")}
+      <tr class="total"><td>Net, at ${yrs(T)}</td><td class="${cls(total)}">${fmtUSD(total)}</td></tr></table>`;
+  }
+
+  function beText(be, short) {
+    if (!be) return "";
+    if (be.always) return short ? "always" : "any return at all";
+    if (be.never) return short ? "never" : "no return would do it";
+    return `${be.side} ${fmtPct(be.rate)}`;
+  }
+
+  // ---- render
+  let chart, rchart;
+  function render(res) {
+    const { st, loan0, ptsCost, rb, rm, rp, dMore, dPts, beMore, bePts, trigger } = res;
+    $("o-loan").textContent = fmtUSD(loan0, false);
+    $("o-pi").textContent = fmtUSD(rb.initialPayment, false) + " / mo";
+    $("d1lbl").textContent = fmtPct(st.d1, 1);
+
+    // section 2
+    const extra = st.price * (st.d1 - st.d0);
+    $("o-dp-cashlbl").textContent = extra >= 0 ? "Extra cash into the house" : "Cash kept out of the house";
+    $("o-dp-cash").textContent = fmtUSD(Math.abs(extra), false);
+    $("o-dp-mslbl").textContent = yrs(st.ms2);
+    const v2 = dMore[st.ms2]; $("o-dp-val").textContent = fmtUSD(v2); $("o-dp-val").className = "big " + cls(v2);
+    $("o-dp-be").textContent = beText(beMore[st.ms2]);
+    $("dp-decomp").innerHTML = decomp(rm, rb, st.ms2, {
+      cash: extra >= 0 ? "Cash put into the house, charged for lost growth" : "Cash kept out of the house, grown",
+      pays: extra >= 0 ? "Lower payments, reinvested" : "Higher payments, paid from the budget" });
+
+    // section 3
+    $("s3").classList.toggle("collapsed", !st.on3);
+    if (st.on3) {
+      const dPmt = rp.initialPayment - rb.initialPayment;
+      $("o-pt-cashlbl").textContent = ptsCost >= 0 ? "Cash for the points" : "Lender credit received";
+      $("o-pt-cash").textContent = fmtUSD(Math.abs(ptsCost), false);
+      $("o-pt-pmt").textContent = fmtUSD(dPmt) + " / mo";
+      const naive = ptsCost > 0 && dPmt < 0 ? ptsCost / -dPmt : null;
+      $("o-pt-naive").textContent = naive ? `${Math.round(naive)} months` : "n/a";
+      const x = Engine.crossover(dPts);
+      $("o-pt-true").textContent = !x ? "never within the term" : x.direction === "starts" ? `${x.month} months` : `pays until month ${x.month}, then costs you`;
+      $("o-pt-mslbl").textContent = yrs(st.ms3);
+      const v3 = dPts[st.ms3]; $("o-pt-val").textContent = fmtUSD(v3); $("o-pt-val").className = "big " + cls(v3);
+      $("o-pt-be").textContent = beText(bePts[st.ms3]);
+      $("pt-decomp").innerHTML = decomp(rp, rb, st.ms3, {
+        cash: ptsCost >= 0 ? "Cash for the points, charged for lost growth" : "Credit received, grown",
+        pays: ptsCost >= 0 ? "Lower payments, reinvested" : "Higher payments, paid from the budget" });
+    }
+
+    // section 4
+    $("s4").classList.toggle("collapsed", !st.on4);
+    $("rtrig").value = fmtPct(trigger, 2) + " or more";
+    $("lg-refi").hidden = !st.on4;
+    if (st.on4) {
+      const line = (name, run) => `<dt>${name}</dt><dd>${run.refis.length ? run.refis.map(r => `year ${(r.month / 12).toFixed(1)} to ${fmtPct(r.to, 3)}`).join(", ") : "never refinances"}</dd>`;
+      $("o-refi").innerHTML = line("Your baseline loan", rb) + line(`${fmtPct(st.d1, 1)} down`, rm) + (rp ? line("Buydown", rp) : "");
+    }
+
+    // verdict
+    const say = (d, T) => `<b class="${cls(d[T])}">${fmtUSD(d[T])}</b>`;
+    let v = `<p>Putting ${fmtPct(st.d1, 1)} down instead of ${fmtPct(st.d0, 1)} leaves you ${say(dMore, 120)} at ten years and ${say(dMore, 360)} at thirty.</p>`;
+    if (st.on3) {
+      const x = Engine.crossover(dPts);
+      v += `<p>${ptsCost >= 0 ? "Buying " + st.pts + " point" + (Math.abs(st.pts) === 1 ? "" : "s") : "Taking a " + Math.abs(st.pts) + "% credit"} leaves you ${say(dPts, 120)} at ten years and ${say(dPts, 360)} at thirty${x ? `, and ${x.direction === "starts" ? "starts paying off" : "stops paying off"} at ${yrs(x.month)}` : ""}.</p>`;
+    }
+    if (st.on4) {
+      const y = rb.refis.length ? `refinances in year ${(rb.refis[0].month / 12).toFixed(1)}` : "never refinances";
+      v += `<p>On this rate path your baseline loan ${y}${rp ? (rp.refis.length ? `; the buydown refinances in year ${(rp.refis[0].month / 12).toFixed(1)}` : "; the buydown never does, because its lower rate needs a bigger drop to be worth it") : ""}.</p>`;
+    }
+    $("verdict").innerHTML = v;
+
+    // milestone table
+    let t = `<tr><th></th>${MS.map(m => `<th>${m / 12} yr</th>`).join("")}</tr>`;
+    t += `<tr class="lead"><td>${fmtPct(st.d1, 1)} down instead</td>${MS.map(m => `<td class="${cls(dMore[m])}">${fmtUSD(dMore[m])}</td>`).join("")}</tr>`;
+    t += `<tr><td class="sub">worth it if you'd earn</td>${MS.map(m => `<td class="sub">${beText(beMore[m], true)}</td>`).join("")}</tr>`;
+    if (st.on3) {
+      t += `<tr class="lead"><td>Buydown</td>${MS.map(m => `<td class="${cls(dPts[m])}">${fmtUSD(dPts[m])}</td>`).join("")}</tr>`;
+      t += `<tr><td class="sub">worth it if you'd earn</td>${MS.map(m => `<td class="sub">${beText(bePts[m], true)}</td>`).join("")}</tr>`;
+    }
+    $("mstable").innerHTML = t;
+    $("foot").textContent = `Versus your baseline: ${fmtPct(st.d0, 1)} down at ${fmtPct(st.r0, 3)} with no points, assuming ${fmtPct(st.inv, 1)} on invested money. Dollar figures scale exactly with the loan.`;
+
+    // main chart
+    const labels = dMore.map((_, m) => m / 12);
+    const mkDs = (d, run, color, label) => {
+      const rm = new Set(run.refis.map(r => r.month));
+      return { label, data: d, borderColor: color, borderWidth: 2.2, pointRadius: d.map((_, m) => rm.has(m) ? 6 : 0),
+        pointStyle: "triangle", pointBackgroundColor: color, pointBorderColor: color, tension: 0,
+        fill: { target: "origin", above: "rgba(31,122,77,0.08)", below: "rgba(179,64,46,0.08)" } };
+    };
+    const ds = [mkDs(dMore, rm, "#2F5D8A", `${fmtPct(st.d1, 1)} down instead`)];
+    if (st.on3) ds.push(mkDs(dPts, rp, "#C58B1F", "Buydown"));
+    const opts = {
+      animation: false, responsive: true, maintainAspectRatio: false,
+      interaction: { mode: "index", intersect: false },
+      plugins: { legend: { display: true, position: "bottom", labels: { boxWidth: 12, boxHeight: 3, font: { size: 12 } } }, tooltip: { callbacks: {
+        title: (items) => `Year ${(items[0].parsed.x).toFixed(1)}`,
+        label: (c) => `${c.dataset.label}: ${fmtUSD(c.parsed.y)}` } } },
+      scales: {
+        x: { type: "linear", min: 0, max: st.term / 12, ticks: { stepSize: 5, callback: (v) => `${v} yr` }, grid: { color: "#EEF0EC" } },
+        y: { ticks: { callback: (v) => fmtUSD(v, false) }, grid: { color: (c) => c.tick.value === 0 ? "#1B2430" : "#EEF0EC", lineWidth: (c) => c.tick.value === 0 ? 1.5 : 1 } },
+      },
+    };
+    const data = { labels, datasets: ds.map(d => ({ ...d, data: d.data.map((y, i) => ({ x: labels[i], y })) })) };
+    if (chart) { const hid = chart.data.datasets.map((_, i) => chart.getDatasetMeta(i).hidden); chart.data = data; chart.options = opts; chart.update(); hid.forEach((h, i) => { if (h && chart.data.datasets[i]) chart.setDatasetVisibility(i, false); }); chart.update(); }
+    else chart = new Chart($("chart"), { type: "line", data, options: opts });
+
+    // rate chart
+    $("rc-wrap").hidden = !st.on4;
+    if (st.on4) {
+      const mkt = labels.map((_, m) => res.sh.ratePath(Math.max(1, m)));
+      const rds = [
+        { label: "Market rate", data: mkt.map((y, i) => ({ x: labels[i], y })), borderColor: "#9AA3AD", borderDash: [4, 4], borderWidth: 1.5, pointRadius: 0, stepped: true },
+        { label: "Your baseline loan", data: rb.noteRate.map((y, i) => ({ x: labels[i], y })), borderColor: "#1B2430", borderWidth: 2, pointRadius: 0, stepped: true },
+        { label: `${fmtPct(st.d1, 1)} down`, data: rm.noteRate.map((y, i) => ({ x: labels[i], y })), borderColor: "#2F5D8A", borderWidth: 2, pointRadius: 0, stepped: true },
+      ];
+      if (rp) rds.push({ label: "Buydown", data: rp.noteRate.map((y, i) => ({ x: labels[i], y })), borderColor: "#C58B1F", borderWidth: 2, pointRadius: 0, stepped: true });
+      const ropts = { animation: false, responsive: true, maintainAspectRatio: false, interaction: { mode: "index", intersect: false },
+        plugins: { legend: { display: true, position: "bottom", labels: { boxWidth: 12, font: { size: 11 } } },
+          tooltip: { callbacks: { title: (it) => `Year ${it[0].parsed.x.toFixed(1)}`, label: (c) => `${c.dataset.label}: ${fmtPct(c.parsed.y, 3)}` } } },
+        scales: { x: { type: "linear", min: 0, max: st.term / 12, ticks: { stepSize: 5, callback: (v) => `${v} yr` }, grid: { color: "#EEF0EC" } },
+                  y: { ticks: { callback: (v) => fmtPct(v, 1) }, grid: { color: "#EEF0EC" } } } };
+      if (rchart) { rchart.data = { datasets: rds }; rchart.options = ropts; rchart.update(); }
+      else rchart = new Chart($("ratechart"), { type: "line", data: { datasets: rds }, options: ropts });
+    }
+  }
+
+  // ---- waypoints UI
+  function renderWaypoints() {
+    const tb = $("wptable").querySelector("tbody");
+    tb.innerHTML = waypoints.length ? "" : `<tr><td colspan="3" class="hint" style="padding:6px 4px">No changes: the market rate stays at ${fmtPct(num("r0") / 100, 3)}.</td></tr>`;
+    waypoints.forEach((w, i) => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `<td>In year <input type="number" step="0.5" min="0.5" value="${w.year}" data-i="${i}" data-k="year" style="width:70px"></td>
+        <td>rates go to <input type="number" step="0.125" value="${(w.rate * 100).toFixed(3)}" data-i="${i}" data-k="rate" style="width:90px"> %</td>
+        <td style="text-align:right"><button class="small" type="button" data-del="${i}">remove</button></td>`;
+      tb.appendChild(tr);
+    });
+  }
+  function applyPreset() {
+    const p = $("preset").value;
+    if (p === "custom") return;
+    const r0 = num("r0") / 100;
+    waypoints = PRESETS[p].map(w => ({ year: w.year, rate: r0 + w.d }));
+    renderWaypoints();
+  }
+  $("wptable").addEventListener("input", (e) => {
+    const t = e.target; if (!t.dataset.k) return;
+    const w = waypoints[+t.dataset.i];
+    w[t.dataset.k] = t.dataset.k === "rate" ? parseFloat(t.value) / 100 : parseFloat(t.value);
+    $("preset").value = "custom"; update();
+  });
+  $("wptable").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-del]"); if (!b) return;
+    waypoints.splice(+b.dataset.del, 1); $("preset").value = "custom"; renderWaypoints(); update();
+  });
+  $("addwp").addEventListener("click", () => {
+    const last = waypoints[waypoints.length - 1];
+    waypoints.push({ year: last ? last.year + 2 : 2, rate: last ? last.rate : num("r0") / 100 });
+    $("preset").value = "custom"; renderWaypoints(); update();
+  });
+  $("preset").addEventListener("change", () => { applyPreset(); update(); });
+
+  // ---- prefill helpers: keep the point-rate and alt-rate in step with the base rate until the user edits them
+  let rpTouched = false, r1Touched = false;
+  $("rp").addEventListener("input", () => { rpTouched = true; });
+  $("r1").addEventListener("input", () => { r1Touched = true; });
+  function syncRates() {
+    if (!rpTouched) $("rp").value = (num("r0") - num("pts") * 0.25).toFixed(3);
+    if (!r1Touched) $("r1").value = num("r0").toFixed(3);
+  }
+  $("pts").addEventListener("input", () => { rpTouched = false; });
+
+  // ---- wire up
+  function update() {
+    syncRates();
+    try { render(compute(readState())); } catch (e) { console.error(e); }
+  }
+  document.querySelectorAll("input, select").forEach(el => {
+    if (el.closest("#wptable")) return;
+    el.addEventListener("input", update); el.addEventListener("change", update);
+  });
+  applyPreset();
+  update();
+})();
+</script>
+</body>
+</html>
