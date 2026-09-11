@@ -41,6 +41,13 @@ not which one is right. Dollar figures scale exactly with the loan.
 
 ## Assumptions worth knowing
 
+- Under 20% down, PMI is charged on the original loan until the balance
+  falls below the cancellation level (78% of price by default), is paid from
+  the same monthly budget, and receives the same tax benefit as interest,
+  which it has had since the 2026 tax year. It is the one carrying cost that
+  differs between down payments, so it is modelled; insurance and property
+  tax are not, because they are identical across every option.
+
 - Capital gains are charged on the growth of the brokerage account, treating
   it as an account that is in gain. Set the rate to zero for a tax-advantaged
   account.

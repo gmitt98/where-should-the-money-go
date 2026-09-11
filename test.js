@@ -20,7 +20,8 @@ const near = (a, b, tol, msg) => {
 // 20% cap gains, 25% tax benefit. Gap at 10 years = $5,833.03 on a $600k loan.
 const price = 750000, d = 0.20, r0 = 0.065, term = 360;
 const shared = { termMonths: term, invReturn: 0.08, drag: 0.004, capGains: 0.20,
-  taxBenefit: 0.25, refiOn: false, refiCost: 0, refiTrigger: 0, ratePath: () => r0 };
+  taxBenefit: 0.25, refiOn: false, refiCost: 0, refiTrigger: 0, ratePath: () => r0,
+  price, pmiRate: 0.0055, pmiCancelLtv: 0.78, pmiAboveLtv: 0.80 };
 const loan = price * (1 - d);
 const base = { loan, rate: r0, upfront: price * d };
 const pts  = { loan, rate: 0.060, upfront: price * d + 0.02 * loan };
@@ -54,4 +55,18 @@ near(rbR.noteRate[30], 0.05, 1e-12, "note rate after refi");
 // A 4-point buydown at 5.5% does NOT refi: 5.0% is not below 5.5%-0.67%
 const deep = { loan, rate: 0.055, upfront: price * d + 0.04 * loan };
 near(Engine.simulate(deep, shR).refis.length, 0, 0, "deep buydown survives the rate drop");
+// PMI: 10% down on $750k, 0.55% of a $675k loan, cancels below 78% LTV.
+// Independent count of months until the balance drops under 78% of price.
+const low = { loan: price * 0.90, rate: r0, upfront: price * 0.10 };
+const shP = { ...shared, budget: Engine.pmt(r0 / 12, term, low.loan) + 0.0055 * low.loan / 12 };
+const rl = Engine.simulate(low, shP);
+let b = low.loan, months = 0; const pf = Engine.pmt(r0 / 12, term, low.loan);
+for (let m = 1; m <= term; m++) { if (b / price > 0.78) months++; b -= pf - b * r0 / 12; }
+near(rl.initialPmi, 0.0055 * low.loan / 12, 1e-9, "initial PMI is 0.55% of the original loan, monthly");
+near(rl.pmiMonths, months, 0, "PMI stops the month LTV falls under 78%");
+near(rl.pmiTotal, months * rl.initialPmi, 1e-6, "total PMI paid");
+near(Engine.simulate(base, shP).pmiMonths, 0, 0, "no PMI at 20% down");
+// PMI is deductible: tax account must be larger than with a zero benefit
+const rl0 = Engine.simulate(low, { ...shP, taxBenefit: 0 });
+near(rl.tax[12] > rl0.tax[12] ? 1 : 0, 1, 0, "PMI receives the tax benefit");
 console.log(process.exitCode ? "\nFAILURES" : "\nall checks passed");

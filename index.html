@@ -84,6 +84,8 @@
   table.ms th { font-weight: 500; color: var(--muted); }
   table.ms th:first-child, table.ms td:first-child { text-align: left; }
   table.ms td.sub { color: var(--muted); font-size: 0.82rem; }
+  table.cmp { margin-top: 12px; font-size: 0.82rem; }
+  table.cmp th, table.cmp td { padding: 5px 2px; }
   table.ms tr.lead td { font-weight: 500; }
   .ratechart { height: 180px; position: relative; margin-top: 18px; }
   .foot { font-size: 0.82rem; color: var(--muted); margin: 14px 0 0; }
@@ -132,6 +134,8 @@
     <dl class="readout">
       <dt>Loan amount</dt><dd id="o-loan"></dd>
       <dt>Monthly principal and interest</dt><dd id="o-pi"></dd>
+      <dt id="o-pmi-lbl">Monthly PMI, because you're under 20% down</dt><dd id="o-pmi" class="loss"></dd>
+      <dt id="o-tot-lbl">Total monthly, P&amp;I plus PMI</dt><dd id="o-tot" class="big"></dd>
     </dl>
   </section>
 
@@ -140,7 +144,7 @@
     <p class="why">Every extra dollar in the house retires a dollar of debt at your note rate, guaranteed. The same dollar in the market earns whatever the market gives.</p>
     <div class="row one">
       <label><span class="lbl">Compare against putting <b id="d1lbl">30%</b> down</span>
-        <input id="d1" type="range" min="0" max="100" step="0.5" value="30">
+        <input id="d1" type="range" min="3" max="100" step="0.5" value="30">
       </label>
     </div>
     <div class="row">
@@ -148,6 +152,12 @@
       <label><span class="lbl">Show details at</span><span class="field"><select id="ms2"><option value="24">2 years</option><option value="60">5 years</option><option value="120" selected>10 years</option><option value="180">15 years</option><option value="360">30 years</option></select></span></label>
     </div>
     <p class="hint">Lenders often price a better rate once you cross 25% or 30% down. If your rate sheet shows that, put the better rate here. Otherwise leave it equal.</p>
+    <div class="row">
+      <label><span class="lbl">PMI rate, if under 20% down</span><span class="field"><input id="pmi" type="number" step="0.05" min="0" max="3" value="0.55"><span class="unit">% of loan / yr</span></span></label>
+      <label><span class="lbl">PMI ends when the balance falls under</span><span class="field"><input id="pmiltv" type="number" step="1" min="50" max="80" value="78"><span class="unit">% of price</span></span></label>
+    </div>
+    <p class="hint">PMI runs 0.3% to 1.2% a year depending on credit score and how far under 20% you are. It cancels automatically at 78% of the original price, or at 80% if you ask. Since 2026 it is tax-deductible like mortgage interest, and the model treats it that way.</p>
+    <div class="mswrap"><table class="ms cmp" id="cmptable"></table></div>
     <dl class="readout">
       <dt id="o-dp-cashlbl">Extra cash into the house</dt><dd id="o-dp-cash"></dd>
       <dt>Worth, versus investing it, at <span id="o-dp-mslbl">10 years</span></dt><dd id="o-dp-val" class="big"></dd>
@@ -224,6 +234,7 @@
   <section class="method" id="method">
     <h2>How this works</h2>
     <p>Every option is given the same cash at closing and the same monthly budget, set to the most expensive option's payment. Whatever an option doesn't spend at closing is invested. Whatever it doesn't spend each month is invested too, along with the tax benefit on that month's interest. At any point in time, wealth is the brokerage account minus the loan balance. The house is the same house in every option, so its value, its appreciation, its taxes and its insurance all cancel and never appear.</p>
+    <p>Under 20% down, PMI is charged on the original loan until the balance falls below the cancellation level, is paid out of the same budget, and gets the same tax benefit as interest, which it has had since the 2026 tax year. It is the one carrying cost that genuinely differs between down payments, which is why it is here and insurance and property tax are not.</p>
     <p>That is why there is no "how much cash do you have" question. A point costs a percentage of the loan and saves a percentage of the loan, so loan size cancels. A dollar of down payment retires a dollar of debt at the note rate regardless of the house. Cash on hand decides which options you can afford, not which one is right.</p>
     <p>Points and down payments are guaranteed returns. Investments are not. Everything here compares expected values and is blind to risk, so over long horizons it leans toward the market by construction. A lower payment is real insurance against a bad year and shows up nowhere in these numbers.</p>
     <p>Discount points on a purchase are usually deductible in the year paid if you itemize; this doesn't credit that, so it is mildly harsh on buydowns. The tax benefit rate is held constant when it really falls as interest declines, which is mildly generous to them. Refinancing here keeps the remaining term rather than resetting to a fresh thirty years.</p>
@@ -240,7 +251,9 @@
 // does not spend at closing goes into a brokerage account. Each month, the
 // budget minus that branch's actual P&I goes into the account too, plus the
 // tax benefit on that month's interest. Wealth = -loan balance + brokerage
-// (net of capital gains on its growth). The house itself is identical in every branch and
+// (net of capital gains on its growth). PMI, when the down payment is under
+// 20%, is a monthly outflow keyed to the original loan until the balance
+// falls below the cancellation LTV, and is tax-deductible like interest. The house itself is identical in every branch and
 // cancels, so it never appears.
 // ---------------------------------------------------------------------------
 const Engine = (() => {
@@ -250,6 +263,7 @@ const Engine = (() => {
 
   // branch: { loan, rate, upfront }   upfront = cash spent at closing
   // shared: { termMonths, budget, invReturn, drag, capGains, taxBenefit,
+  //           price, pmiRate, pmiCancelLtv, pmiAboveLtv,
   //           refiOn, refiCost, refiTrigger, ratePath(month) -> annual rate }
   function simulate(branch, shared) {
     const n = shared.termMonths;
@@ -261,14 +275,16 @@ const Engine = (() => {
     //   cash  : money spent (or received) at closing, compounding
     //   pays  : budget minus actual P&I, reinvested
     //   tax   : tax benefit on interest, reinvested
-    let cash = -branch.upfront, pays = 0, tax = 0;
+    let cash = -branch.upfront, pays = 0, tax = 0, pmiAcct = 0;
     let basis = -branch.upfront;
+    const pmiApplies = shared.pmiRate > 0 && branch.loan / shared.price > shared.pmiAboveLtv + 1e-12;
+    const pmiMonthly = pmiApplies ? shared.pmiRate * branch.loan / 12 : 0;
     const out = {
-      wealth: [], balance: [], noteRate: [], cash: [], pays: [], tax: [],
-      capgains: [], refis: [], initialPayment: pay,
+      wealth: [], balance: [], noteRate: [], cash: [], pays: [], tax: [], pmiAcct: [], pmi: [],
+      capgains: [], refis: [], initialPayment: pay, initialPmi: pmiMonthly, pmiMonths: 0, pmiTotal: 0,
     };
-    const record = (m) => {
-      const brok = cash + pays + tax;
+    const record = (m, pmi = 0) => {
+      const brok = cash + pays + tax + pmiAcct;
       // Linear capital gains: assumes the taxable account is in gain, so each
       // marginal dollar is taxed on its growth. This is what lets the size of
       // the cash pot cancel out of every comparison.
@@ -276,7 +292,8 @@ const Engine = (() => {
       out.wealth[m] = -bal + brok - cg;
       out.balance[m] = bal;
       out.noteRate[m] = note;
-      out.cash[m] = cash; out.pays[m] = pays; out.tax[m] = tax; out.capgains[m] = -cg;
+      out.cash[m] = cash; out.pays[m] = pays; out.tax[m] = tax; out.pmiAcct[m] = pmiAcct;
+      out.pmi[m] = pmi; out.capgains[m] = -cg;
     };
     record(0);
     for (let m = 1; m <= n; m++) {
@@ -290,18 +307,21 @@ const Engine = (() => {
           pay = pmt(note / 12, n - m + 1, bal);   // keeps the remaining term
         }
       }
+      const pmi = (pmiApplies && bal > 0 && bal / shared.price > shared.pmiCancelLtv + 1e-12) ? pmiMonthly : 0;
+      if (pmi > 0) { out.pmiMonths++; out.pmiTotal += pmi; }
       const interest = bal * note / 12;
       const principal = bal > 0 ? Math.min(bal, pay - interest) : 0;
       const paid = bal > 0 ? interest + principal : 0;
       const c1 = shared.budget - paid;
-      const c2 = shared.taxBenefit * interest;
+      const c2 = shared.taxBenefit * (interest + pmi);
       cash *= R;
       pays = pays * R + c1;
       tax = tax * R + c2;
-      basis += c1 + c2;
+      pmiAcct = pmiAcct * R - pmi;
+      basis += c1 + c2 - pmi;
       bal -= principal;
       if (bal < 1e-9) bal = 0;
-      record(m);
+      record(m, pmi);
     }
     return out;
   }
@@ -390,6 +410,7 @@ if (typeof module !== "undefined") module.exports = Engine;
       d0: num("d0") / 100, r0: num("r0") / 100, inv: num("inv") / 100, tau: num("tau") / 100,
       cg: num("cg") / 100, drag: num("drag") / 100,
       d1: num("d1") / 100, r1: num("r1") / 100, ms2: parseInt($("ms2").value, 10),
+      pmi: num("pmi") / 100, pmiltv: num("pmiltv") / 100,
       on3: $("on3").checked, pts: num("pts"), rp: num("rp") / 100, ptcost: num("ptcost") / 100,
       ms3: parseInt($("ms3").value, 10),
       on4: $("on4").checked, rcost: num("rcost") / 100, rpay: num("rpay"),
@@ -404,10 +425,12 @@ if (typeof module !== "undefined") module.exports = Engine;
     const ptsCost = st.pts * st.ptcost * loan0;
     const pointsBr = { loan: loan0, rate: st.rp, upfront: st.price * st.d0 + ptsCost };
     const branches = [base, more]; if (st.on3) branches.push(pointsBr);
-    const budget = Math.max(...branches.map(b => Engine.pmt(b.rate / 12, st.term, b.loan)));
+    const initPmi = (b) => (st.pmi > 0 && b.loan / st.price > 0.80 + 1e-12) ? st.pmi * b.loan / 12 : 0;
+    const budget = Math.max(...branches.map(b => Engine.pmt(b.rate / 12, st.term, b.loan) + initPmi(b)));
     const trigger = st.rcost * 12 / st.rpay;
     const mkShared = (inv) => ({
       termMonths: st.term, budget, invReturn: inv, drag: st.drag, capGains: st.cg, taxBenefit: st.tau,
+      price: st.price, pmiRate: st.pmi, pmiCancelLtv: st.pmiltv, pmiAboveLtv: 0.80,
       refiOn: st.on4, refiCost: st.rcost, refiTrigger: trigger,
       ratePath: Engine.makeRatePath(st.r0, waypoints),
     });
@@ -428,12 +451,14 @@ if (typeof module !== "undefined") module.exports = Engine;
     const rows = [
       [labels.cash, alt.cash[T] - baseRun.cash[T]],
       [labels.pays, alt.pays[T] - baseRun.pays[T]],
-      ["Tax deduction given up, reinvested", alt.tax[T] - baseRun.tax[T]],
-      ["Lower loan balance", -(alt.balance[T] - baseRun.balance[T])],
+      ["Tax deduction difference, reinvested", alt.tax[T] - baseRun.tax[T]],
+      ["PMI difference, charged for lost growth", alt.pmiAcct[T] - baseRun.pmiAcct[T]],
+      ["Difference in loan balance", -(alt.balance[T] - baseRun.balance[T])],
       ["Capital gains tax difference", alt.capgains[T] - baseRun.capgains[T]],
     ];
     const total = rows.reduce((s, r) => s + r[1], 0);
-    return `<table>${rows.map(([k, v]) => `<tr><td>${k}</td><td class="${cls(v)}">${fmtUSD(v)}</td></tr>`).join("")}
+    const shown = rows.filter(r => Math.abs(r[1]) > 0.5);
+    return `<table>${shown.map(([k, v]) => `<tr><td>${k}</td><td class="${cls(v)}">${fmtUSD(v)}</td></tr>`).join("")}
       <tr class="total"><td>Net, at ${yrs(T)}</td><td class="${cls(total)}">${fmtUSD(total)}</td></tr></table>`;
   }
 
@@ -450,6 +475,12 @@ if (typeof module !== "undefined") module.exports = Engine;
     const { st, loan0, ptsCost, rb, rm, rp, dMore, dPts, beMore, bePts, trigger } = res;
     $("o-loan").textContent = fmtUSD(loan0, false);
     $("o-pi").textContent = fmtUSD(rb.initialPayment, false) + " / mo";
+    const basePmi = rb.initialPmi > 0;
+    $("o-pmi-lbl").hidden = $("o-pmi").hidden = $("o-tot-lbl").hidden = $("o-tot").hidden = !basePmi;
+    if (basePmi) {
+      $("o-pmi").textContent = fmtUSD(rb.initialPmi, false) + " / mo";
+      $("o-tot").textContent = fmtUSD(rb.initialPayment + rb.initialPmi, false) + " / mo";
+    }
     $("d1lbl").textContent = fmtPct(st.d1, 1);
 
     // section 2
@@ -459,6 +490,16 @@ if (typeof module !== "undefined") module.exports = Engine;
     $("o-dp-mslbl").textContent = yrs(st.ms2);
     const v2 = dMore[st.ms2]; $("o-dp-val").textContent = fmtUSD(v2); $("o-dp-val").className = "big " + cls(v2);
     $("o-dp-be").textContent = beText(beMore[st.ms2]);
+    const pmiEnds = (run) => run.initialPmi > 0 ? (run.pmiMonths >= st.term ? "never" : `after ${yrs(run.pmiMonths)}`) : "not needed";
+    const cmpRow = (k, a, b, f, cl = () => "") => `<tr><td>${k}</td><td class="${cl(a)}">${f(a)}</td><td class="${cl(b)}">${f(b)}</td><td class="${cls(-(b - a))}">${typeof a === "number" && typeof b === "number" ? f(b - a, true) : ""}</td></tr>`;
+    const mo = (x, signed) => (signed ? fmtUSD(x) : fmtUSD(x, false));
+    $("cmptable").innerHTML = `<tr><th></th><th>${fmtPct(st.d0, 1)} down</th><th>${fmtPct(st.d1, 1)} down</th><th>change</th></tr>`
+      + cmpRow("Down payment", st.price * st.d0, st.price * st.d1, (x, sg) => sg ? fmtUSD(x) : fmtUSD(x, false))
+      + cmpRow("Loan", rb.balance[0], rm.balance[0], (x, sg) => sg ? fmtUSD(x) : fmtUSD(x, false))
+      + cmpRow("P&amp;I per month", rb.initialPayment, rm.initialPayment, mo)
+      + cmpRow("PMI per month", rb.initialPmi, rm.initialPmi, mo)
+      + `<tr class="lead"><td>Total per month</td><td>${mo(rb.initialPayment + rb.initialPmi)}</td><td>${mo(rm.initialPayment + rm.initialPmi)}</td><td class="${cls(-((rm.initialPayment + rm.initialPmi) - (rb.initialPayment + rb.initialPmi)))}">${mo((rm.initialPayment + rm.initialPmi) - (rb.initialPayment + rb.initialPmi), true)}</td></tr>`
+      + `<tr><td class="sub">PMI ends</td><td class="sub">${pmiEnds(rb)}</td><td class="sub">${pmiEnds(rm)}</td><td></td></tr>`;
     $("dp-decomp").innerHTML = decomp(rm, rb, st.ms2, {
       cash: extra >= 0 ? "Cash put into the house, charged for lost growth" : "Cash kept out of the house, grown",
       pays: extra >= 0 ? "Lower payments, reinvested" : "Higher payments, paid from the budget" });
