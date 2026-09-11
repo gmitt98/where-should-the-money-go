@@ -152,11 +152,13 @@
       <label><span class="lbl">Show details at</span><span class="field"><select id="ms2"><option value="24">2 years</option><option value="60">5 years</option><option value="120" selected>10 years</option><option value="180">15 years</option><option value="360">30 years</option></select></span></label>
     </div>
     <p class="hint">Lenders often price a better rate once you cross 25% or 30% down. If your rate sheet shows that, put the better rate here. Otherwise leave it equal.</p>
-    <div class="row">
+    <label class="toggle"><input id="nopmi" type="checkbox"> This loan has no PMI even under 20% down</label>
+    <div class="row" id="pmirow">
       <label><span class="lbl">PMI rate, if under 20% down</span><span class="field"><input id="pmi" type="number" step="0.05" min="0" max="3" value="0.55"><span class="unit">% of loan / yr</span></span></label>
       <label><span class="lbl">PMI ends when the balance falls under</span><span class="field"><input id="pmiltv" type="number" step="1" min="50" max="80" value="78"><span class="unit">% of price</span></span></label>
     </div>
-    <p class="hint">PMI runs 0.3% to 1.2% a year depending on credit score and how far under 20% you are. It cancels automatically at 78% of the original price, or at 80% if you ask. Since 2026 it is tax-deductible like mortgage interest, and the model treats it that way.</p>
+    <p class="hint" id="pmihint">PMI runs 0.3% to 1.2% a year depending on credit score and how far under 20% you are. It cancels automatically at 78% of the original price, or at 80% if you ask. Since 2026 it is tax-deductible like mortgage interest, and the model treats it that way.</p>
+    <p class="hint" id="nopmihint" hidden>VA loans and some credit union or portfolio loans skip PMI entirely. A VA loan usually charges a one-time funding fee instead, which this does not model; treat it as part of closing costs.</p>
     <div class="mswrap"><table class="ms cmp" id="cmptable"></table></div>
     <dl class="readout">
       <dt id="o-dp-cashlbl">Extra cash into the house</dt><dd id="o-dp-cash"></dd>
@@ -410,7 +412,8 @@ if (typeof module !== "undefined") module.exports = Engine;
       d0: num("d0") / 100, r0: num("r0") / 100, inv: num("inv") / 100, tau: num("tau") / 100,
       cg: num("cg") / 100, drag: num("drag") / 100,
       d1: num("d1") / 100, r1: num("r1") / 100, ms2: parseInt($("ms2").value, 10),
-      pmi: num("pmi") / 100, pmiltv: num("pmiltv") / 100,
+      nopmi: $("nopmi").checked,
+      pmi: $("nopmi").checked ? 0 : num("pmi") / 100, pmiltv: num("pmiltv") / 100,
       on3: $("on3").checked, pts: num("pts"), rp: num("rp") / 100, ptcost: num("ptcost") / 100,
       ms3: parseInt($("ms3").value, 10),
       on4: $("on4").checked, rcost: num("rcost") / 100, rpay: num("rpay"),
@@ -490,7 +493,9 @@ if (typeof module !== "undefined") module.exports = Engine;
     $("o-dp-mslbl").textContent = yrs(st.ms2);
     const v2 = dMore[st.ms2]; $("o-dp-val").textContent = fmtUSD(v2); $("o-dp-val").className = "big " + cls(v2);
     $("o-dp-be").textContent = beText(beMore[st.ms2]);
-    const pmiEnds = (run) => run.initialPmi > 0 ? (run.pmiMonths >= st.term ? "never" : `after ${yrs(run.pmiMonths)}`) : "not needed";
+    $("pmirow").hidden = $("pmihint").hidden = st.nopmi;
+    $("nopmihint").hidden = !st.nopmi;
+    const pmiEnds = (run) => run.initialPmi > 0 ? (run.pmiMonths >= st.term ? "never" : `after ${yrs(run.pmiMonths)}`) : (st.nopmi ? "none on this loan" : "not needed");
     const cmpRow = (k, a, b, f, cl = () => "") => `<tr><td>${k}</td><td class="${cl(a)}">${f(a)}</td><td class="${cl(b)}">${f(b)}</td><td class="${cls(-(b - a))}">${typeof a === "number" && typeof b === "number" ? f(b - a, true) : ""}</td></tr>`;
     const mo = (x, signed) => (signed ? fmtUSD(x) : fmtUSD(x, false));
     $("cmptable").innerHTML = `<tr><th></th><th>${fmtPct(st.d0, 1)} down</th><th>${fmtPct(st.d1, 1)} down</th><th>change</th></tr>`
