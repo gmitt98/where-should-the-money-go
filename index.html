@@ -28,7 +28,7 @@
   main { max-width: 1120px; margin: 0 auto; padding: 16px 24px 64px; display: grid; grid-template-columns: 400px 1fr; gap: 40px; align-items: start; }
   main > * { min-width: 0; }
   #method { grid-column: 1; }
-  @media (max-width: 900px) { #method { grid-column: auto; } }
+  @media (max-width: 900px) { #method { grid-column: auto; } .paystrip { grid-auto-flow: row; } }
   @media (max-width: 900px) { main { grid-template-columns: 1fr; gap: 24px; } .results { position: static !important; } }
 
   section { padding: 24px 0; border-top: 1px solid var(--rule); }
@@ -71,6 +71,13 @@
 
   .results { position: sticky; top: 16px; max-height: calc(100vh - 32px); overflow-y: auto; background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 20px 18px 16px; }
   .mswrap { overflow-x: auto; }
+  .paystrip { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 12px; margin: 0 0 16px; padding: 0 0 14px; border-bottom: 1px solid var(--rule); }
+  .paystrip .pay { min-width: 0; }
+  .paystrip .pay .k { font-size: 0.8rem; color: var(--muted); margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .paystrip .pay .v { font-size: 1.45rem; font-weight: 600; letter-spacing: -0.01em; line-height: 1.1; }
+  .paystrip .pay .v small { font-size: 0.8rem; font-weight: 400; color: var(--muted); }
+  .paystrip .pay .d { font-size: 0.8rem; margin-top: 2px; }
+  .paystrip .pay.base .v { color: var(--ink); } .paystrip .pay.dp .v { color: var(--blue); } .paystrip .pay.pt .v { color: var(--amber); }
   .verdict { font-size: 1.02rem; margin: 0 0 14px; }
   .verdict p { margin: 0 0 6px; }
   .verdict b { font-weight: 600; }
@@ -90,6 +97,9 @@
   .ratechart { height: 180px; position: relative; margin-top: 18px; }
   .foot { font-size: 0.82rem; color: var(--muted); margin: 14px 0 0; }
 
+  .explain { margin-top: 14px; padding: 12px 14px; background: var(--paper); border-left: 3px solid var(--amber); font-size: 0.92rem; }
+  .explain b { font-weight: 600; }
+  .explain p { margin: 0 0 6px; } .explain p:last-child { margin: 0; }
   .decomp { margin-top: 14px; font-size: 0.9rem; }
   .decomp table { width: 100%; border-collapse: collapse; }
   .decomp td { padding: 4px 0; border-bottom: 1px solid var(--rule); }
@@ -170,7 +180,7 @@
 
   <section id="s3" class="collapsed">
     <h2><span class="n">3</span>Buy down the rate?</h2>
-    <p class="why">Points cost cash today for a lower payment every month. That cash could have been invested. Both sides count.</p>
+    <p class="why">Points cost cash today for a lower payment every month. The alternative isn't nothing: keep the cash, park it, and pay the higher payment out of it for as long as it lasts.</p>
     <label class="toggle"><input id="on3" type="checkbox"> Show me a rate buydown</label>
     <div class="row">
       <label><span class="lbl">Discount points (negative for a lender credit)</span><span class="field"><input id="pts" type="number" step="0.125" value="2"></span></label>
@@ -183,12 +193,14 @@
     <p class="hint">Type the rate straight off the lender's sheet. The prefilled rate assumes a quarter point per point, and real pricing gets worse after the second point.</p>
     <dl class="readout">
       <dt id="o-pt-cashlbl">Cash for the points</dt><dd id="o-pt-cash"></dd>
+      <dt>Monthly P&amp;I with these points</dt><dd id="o-pt-pi" class="big"></dd>
       <dt>Monthly payment change</dt><dd id="o-pt-pmt"></dd>
       <dt>Payback the lender will quote</dt><dd id="o-pt-naive"></dd>
       <dt>Payback once the cash is charged for lost growth</dt><dd id="o-pt-true" class="big"></dd>
       <dt>Worth, versus not buying, at <span id="o-pt-mslbl">10 years</span></dt><dd id="o-pt-val" class="big"></dd>
       <dt>It beats investing if you'd earn</dt><dd id="o-pt-be"></dd>
     </dl>
+    <div class="explain" id="pt-park"></div>
     <div class="decomp" id="pt-decomp"></div>
   </section>
 
@@ -222,6 +234,7 @@
 </div>
 
 <aside class="results">
+  <div class="paystrip" id="paystrip"></div>
   <div class="verdict" id="verdict"></div>
   <div class="chartwrap"><canvas id="chart"></canvas></div>
   <div class="legend">
@@ -236,6 +249,7 @@
   <section class="method" id="method">
     <h2>How this works</h2>
     <p>Every option is given the same cash at closing and the same monthly budget, set to the most expensive option's payment. Whatever an option doesn't spend at closing is invested. Whatever it doesn't spend each month is invested too, along with the tax benefit on that month's interest. At any point in time, wealth is the brokerage account minus the loan balance. The house is the same house in every option, so its value, its appreciation, its taxes and its insurance all cancel and never appear.</p>
+    <p>In plain terms, for the buydown: skipping the points and parking the cash, then drawing on it each month to cover the higher payment, is a completely valid choice, and it is exactly what the no-points column does. The buydown only wins if you keep the loan longer than that parked money would have lasted, after the tax deduction and the faster principal paydown are counted.</p>
     <p>Under 20% down, PMI is charged on the original loan until the balance falls below the cancellation level, is paid out of the same budget, and gets the same tax benefit as interest, which it has had since the 2026 tax year. It is the one carrying cost that genuinely differs between down payments, which is why it is here and insurance and property tax are not.</p>
     <p>That is why there is no "how much cash do you have" question. A point costs a percentage of the loan and saves a percentage of the loan, so loan size cancels. A dollar of down payment retires a dollar of debt at the note rate regardless of the house. Cash on hand decides which options you can afford, not which one is right.</p>
     <p>Points and down payments are guaranteed returns. Investments are not. Everything here compares expected values and is blind to risk, so over long horizons it leans toward the market by construction. A lower payment is real insurance against a bad year and shows up nowhere in these numbers.</p>
@@ -515,6 +529,7 @@ if (typeof module !== "undefined") module.exports = Engine;
       const dPmt = rp.initialPayment - rb.initialPayment;
       $("o-pt-cashlbl").textContent = ptsCost >= 0 ? "Cash for the points" : "Lender credit received";
       $("o-pt-cash").textContent = fmtUSD(Math.abs(ptsCost), false);
+      $("o-pt-pi").textContent = fmtUSD(rp.initialPayment, false) + " / mo";
       $("o-pt-pmt").textContent = fmtUSD(dPmt) + " / mo";
       const naive = ptsCost > 0 && dPmt < 0 ? ptsCost / -dPmt : null;
       $("o-pt-naive").textContent = naive ? `${Math.round(naive)} months` : "n/a";
@@ -523,6 +538,27 @@ if (typeof module !== "undefined") module.exports = Engine;
       $("o-pt-mslbl").textContent = yrs(st.ms3);
       const v3 = dPts[st.ms3]; $("o-pt-val").textContent = fmtUSD(v3); $("o-pt-val").className = "big " + cls(v3);
       $("o-pt-be").textContent = beText(bePts[st.ms3]);
+      // How long the parked cash covers the payment difference, on its own.
+      const iM = (st.inv - st.drag) / 12;
+      const lasts = (pv, pm) => {
+        if (pv <= 0 || pm <= 0) return null;
+        if (pv * iM >= pm) return Infinity;
+        return -Math.log(1 - pv * iM / pm) / Math.log(1 + iM);
+      };
+      const pv = Math.abs(ptsCost), pm = Math.abs(dPmt);
+      const nPre = lasts(pv, pm);
+      const fmtN = (n) => n === null ? "" : n === Infinity ? "indefinitely, because its growth alone covers the difference" : `about ${yrs(Math.round(n))} (${Math.round(n)} months)`;
+      const xo = Engine.crossover(dPts);
+      let park;
+      if (ptsCost >= 0 && dPmt < 0) {
+        park = `<p><b>The other way to use this money.</b> Skip the points, park the ${fmtUSD(pv, false)} at ${fmtPct(st.inv, 1)}, and draw ${fmtUSD(pm, false)} from it every month to cover the higher payment. On its own that pot lasts ${fmtN(nPre)}.</p>
+                <p>That's the simple version of the bar the points have to clear. The full comparison also counts the bigger interest deduction you keep by not buying points, and the faster principal paydown you get by buying them, and says the buydown ${xo ? (xo.direction === "starts" ? `pulls ahead at month ${xo.month}` : `stops paying at month ${xo.month}`) : "never pulls ahead within the term"}.</p>`;
+      } else if (ptsCost < 0 && dPmt > 0) {
+        park = `<p><b>Same idea, backwards.</b> Take the ${fmtUSD(pv, false)} credit, park it at ${fmtPct(st.inv, 1)}, and draw ${fmtUSD(pm, false)} from it each month to cover the higher payment. The pot lasts ${fmtN(nPre)}. If you'll be out of this loan well before then, the credit wins; the full comparison ${xo ? `says it stops paying at month ${xo.month}` : "says it never stops paying within the term"}.</p>`;
+      } else {
+        park = "";
+      }
+      $("pt-park").innerHTML = park;
       $("pt-decomp").innerHTML = decomp(rp, rb, st.ms3, {
         cash: ptsCost >= 0 ? "Cash for the points, charged for lost growth" : "Credit received, grown",
         pays: ptsCost >= 0 ? "Lower payments, reinvested" : "Higher payments, paid from the budget" });
@@ -536,6 +572,18 @@ if (typeof module !== "undefined") module.exports = Engine;
       const line = (name, run) => `<dt>${name}</dt><dd>${run.refis.length ? run.refis.map(r => `year ${(r.month / 12).toFixed(1)} to ${fmtPct(r.to, 3)}`).join(", ") : "never refinances"}</dd>`;
       $("o-refi").innerHTML = line("Your baseline loan", rb) + line(`${fmtPct(st.d1, 1)} down`, rm) + (rp ? line("Buydown", rp) : "");
     }
+
+    // payment strip
+    const tot = (run) => run.initialPayment + run.initialPmi;
+    const payCell = (klass, label, run, ref) => {
+      const t = tot(run), sub = run.initialPmi > 0 ? `<small>incl. ${fmtUSD(run.initialPmi, false)} PMI</small>` : "";
+      const d = ref ? `<div class="d ${cls(-(t - tot(ref)))}">${fmtUSD(t - tot(ref))} vs baseline</div>` : `<div class="d">&nbsp;</div>`;
+      return `<div class="pay ${klass}"><div class="k">${label}</div><div class="v">${fmtUSD(t, false)}<small> / mo</small> ${sub}</div>${d}</div>`;
+    };
+    let ps = payCell("base", `Baseline: ${fmtPct(st.d0, 1)} down, ${fmtPct(st.r0, 3)}`, rb, null);
+    ps += payCell("dp", `${fmtPct(st.d1, 1)} down, ${fmtPct(st.r1, 3)}`, rm, rb);
+    if (st.on3) ps += payCell("pt", `${ptsCost >= 0 ? st.pts + " pts" : Math.abs(st.pts) + "% credit"}, ${fmtPct(st.rp, 3)}`, rp, rb);
+    $("paystrip").innerHTML = ps;
 
     // verdict
     const say = (d, T) => `<b class="${cls(d[T])}">${fmtUSD(d[T])}</b>`;
